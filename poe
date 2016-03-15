@@ -1,0 +1,230 @@
+#!/bin/bash
+
+version() {
+    echo "3.0"
+}
+
+usage() {
+    echo "POE `version`
+
+“I have absolutely no pleasure in the stimulants in which I sometimes so madly
+  indulge. It has not been in the pursuit of pleasure that I have periled life
+  and reputation and reason. It has been the desperate attempt to escape from
+  torturing memories, from a sense of insupportable loneliness and a dread of
+  some strange impending doom.”
+                                                            ― Edgar Allan Poe
+
+SYNOPSIS
+    poe -L [-d <signature>] [-l <length>]
+    poe -X [-d <signature>]
+    poe -F
+    poe -h | -v
+
+OPERATIONS
+    -L   Examine Go source code and list suspicious constructs, leftovers
+            from debugging, check length of lines.
+    -X   Remove debugging leftovers.
+    -F   Try to fix possible formatting directives basing on cmd/vet.
+
+OPTIONS
+    -d   Use specified value as debugging signature [default: XXXXXX].
+    -l   Use specified value as maximum line length [default: 80].
+    -h   Show this message.
+    -v   Show version.
+"
+}
+
+__main__() {
+    if [ $# -eq 0 ]; then
+        usage
+        exit 1
+    fi
+
+    local debugging_signature="XXXXXX"
+    local maximum_line_length="80"
+
+    # parse additional options
+    while getopts ":d:l:" arg; do
+        value="$OPTARG"
+        case $arg in
+            d)
+                debugging_signature="$value"
+                ;;
+            l)
+                maximum_line_length="$value"
+                ;;
+        esac
+    done
+
+    # reset getopts
+    local OPTIND
+
+
+    # parse actions
+    while getopts ":LXFvh" arg; do
+        case $arg in
+            L)
+                serve_examine_code \
+                    "$debugging_signature" "$maximum_line_length"
+                ;;
+            X)
+                serve_remove_debugging_leftovers "$debugging_signature"
+                ;;
+            F)
+                serve_fix_formatting_directives
+                ;;
+            v)
+                serve_show_version
+                ;;
+            h)
+                serve_show_usage
+                ;;
+            \?)
+                usage && exit 1
+                ;;
+        esac
+    done
+}
+
+#############################################################################
+
+serve_show_usage() {
+    usage
+    exit 0
+}
+
+serve_show_version() {
+    version
+    exit 0
+}
+
+serve_examine_code() {
+    local debugging_signature="$1"
+    local maximum_line_length="$2"
+
+    log "examine source code"
+
+    for file in `git ls-files`; do
+        if test ! -f $file; then
+            continue
+        fi
+
+        log "examine $file"
+
+        examine_line_length "$file" "$maximum_line_length"
+        examine_debugging_leftovers "$file" "$debugging_signature"
+    done
+
+    log "run metalinter"
+    run_metalinter
+
+    log "run vet"
+    run_vet
+}
+
+serve_remove_debugging_leftovers() {
+    local signature="$1"
+
+    log "remove debugging leftovers"
+    sed -i "/$signature/d" *.go
+
+    log "goimports"
+    goimports -w .
+
+    log "gofmt"
+    gofmt -w .
+}
+
+serve_fix_formatting_directives() {
+    log "fix possible formatting directives"
+
+    fix_directives() {
+        local last_file=""
+
+        run_vet \
+            | awk '/possible formatting directive/{print $1$6}' \
+            | tr ':' ' ' \
+            | while read file line method;
+        do
+            if [ "$last_file" != "$file" ]; then
+                log "processing $file"
+            fi
+            last_file="$file"
+
+            sed -i "${line}s/\.${method}(/\.${method}f(/" $file
+
+            echo "$file"
+        done
+    }
+
+    local fixes=$(fix_directives)
+    local count=$(echo -n "$fixes" | wc -l)
+
+    if [ "$count" -eq 0 ]; then
+        echo "nothing to do here"
+        return
+    fi
+
+    echo "fixed $count possible formatting directives"
+}
+
+#############################################################################
+
+log() {
+    >&2 echo "# $@"
+}
+
+run_vet() {
+    common_functions=(
+        Panic
+        Fatal
+        Error
+        Warning
+        Notice
+        Info
+        Print
+        Debug
+    )
+
+    printfuncs=""
+    for raw_func in "${common_functions[@]}"
+    do
+        func="${raw_func}:0"
+        funcf="${raw_func}f:1"
+
+        if [ -n "$printfuncs" ]; then
+            printfuncs="${printfuncs},"
+        fi
+
+        printfuncs="${printfuncs}${func},${funcf}"
+    done
+
+    go tool vet --printfuncs="$printfuncs" . 2>&1
+}
+
+run_metalinter() {
+    gometalinter -D golint -D gotype -D vet --cyclo-over 15 2>&1
+}
+
+examine_line_length() {
+    local file="$1"
+    local length="$2"
+
+    grep -q ".\{$length\}" "$file"
+    if [ $? -eq 0 ]; then
+        sed 's/\t/    /g' "$file" | grep --color ".\{$length\}" -A 2 -B 2 -n
+    fi
+}
+
+examine_debugging_leftovers() {
+    local file="$1"
+    local signature="$2"
+
+    grep -q "$signature" "$file"
+    if [ $? -eq 0 ]; then
+        grep --color "$signature" -A 2 -B 2 -n "$file"
+    fi
+}
+
+
+__main__ "$@"
