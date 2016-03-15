@@ -5,7 +5,8 @@ pkgrel=1
 pkgdesc="examine, list and fix suspicious constructs in Go source code"
 arch=('i686' 'x86_64')
 license=('GPL')
-makedepends=('go' 'git')
+makedepends=('git')
+depends=('go' 'gometalinter-git')
 
 source=(
 	"poe::git+ssh://github.com/kovetskiy/poe"
