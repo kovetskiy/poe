@@ -1,10 +1,10 @@
 #!/bin/bash
 
 version() {
-    echo "3.0"
+    echo -n "4.0"
 }
 
-usage() {
+help() {
     echo "POE `version`
 
 “I have absolutely no pleasure in the stimulants in which I sometimes so madly
@@ -25,26 +25,28 @@ OPERATIONS
             from debugging, check length of lines.
     -X   Remove debugging leftovers.
     -F   Try to fix possible formatting directives basing on cmd/vet.
+    -V   Show version.
+    -h   Show help.
 
 OPTIONS
     -d   Use specified value as debugging signature [default: XXXXXX].
     -l   Use specified value as maximum line length [default: 80].
-    -h   Show this message.
-    -v   Show version.
+    -v   Verbose output.
 "
 }
 
 __main__() {
     if [ $# -eq 0 ]; then
-        usage
+        help
         exit 1
     fi
 
     local debugging_signature="XXXXXX"
     local maximum_line_length="80"
+    local verbose=false
 
     # parse additional options
-    while getopts ":d:l:" arg; do
+    while getopts ":d:l:v" arg; do
         value="$OPTARG"
         case $arg in
             d)
@@ -53,15 +55,17 @@ __main__() {
             l)
                 maximum_line_length="$value"
                 ;;
+            v)
+                verbose=true
+                ;;
         esac
     done
 
     # reset getopts
     local OPTIND
 
-
     # parse actions
-    while getopts ":LXFvh" arg; do
+    while getopts ":LXFVh" arg; do
         case $arg in
             L)
                 serve_examine_code \
@@ -73,23 +77,23 @@ __main__() {
             F)
                 serve_fix_formatting_directives
                 ;;
-            v)
+            V)
                 serve_show_version
                 ;;
             h)
-                serve_show_usage
-                ;;
-            \?)
-                usage && exit 1
+                serve_show_help
                 ;;
         esac
     done
+
+    help
+    exit 1
 }
 
 #############################################################################
 
-serve_show_usage() {
-    usage
+serve_show_help() {
+    help
     exit 0
 }
 
@@ -120,6 +124,8 @@ serve_examine_code() {
 
     log "run vet"
     run_vet
+
+    exit 0
 }
 
 serve_remove_debugging_leftovers() {
@@ -133,6 +139,8 @@ serve_remove_debugging_leftovers() {
 
     log "gofmt"
     gofmt -w .
+
+    exit 0
 }
 
 serve_fix_formatting_directives() {
@@ -161,17 +169,20 @@ serve_fix_formatting_directives() {
     local count=$(echo -n "$fixes" | wc -l)
 
     if [ "$count" -eq 0 ]; then
-        echo "nothing to do here"
-        return
+        log "nothing to do here"
+    else
+        log "fixed $count possible formatting directives"
     fi
 
-    echo "fixed $count possible formatting directives"
+    exit 0
 }
 
 #############################################################################
 
 log() {
-    >&2 echo "# $@"
+    if $verbose; then
+        >&2 echo "# $@"
+    fi
 }
 
 run_vet() {
