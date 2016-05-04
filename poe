@@ -31,6 +31,7 @@ OPERATIONS
 OPTIONS
     -d   Use specified value as debugging signature [default: XXXXXX].
     -l   Use specified value as maximum line length [default: 80].
+    -t   Use specified value as metalinter deadline timeout [default: 10].
     -v   Verbose output.
 "
 }
@@ -43,17 +44,21 @@ __main__() {
 
     local debugging_signature="XXXXXX"
     local maximum_line_length="80"
+    local metalinter_timeout="10"
     local verbose=false
 
     # parse additional options
-    while getopts ":d:l:v" arg; do
+    while getopts ":d:l:t:v" arg; do
         value="$OPTARG"
         case $arg in
             d)
-                debugging_signature="$value"
+                debugging_signature=$value
                 ;;
             l)
-                maximum_line_length="$value"
+                maximum_line_length=$value
+                ;;
+            t)
+                metalinter_timeout=$value
                 ;;
             v)
                 verbose=true
@@ -69,7 +74,9 @@ __main__() {
         case $arg in
             L)
                 serve_examine_code \
-                    "$debugging_signature" "$maximum_line_length"
+                    "$debugging_signature" \
+                    "$maximum_line_length" \
+                    "$metalinter_timeout"
                 ;;
             X)
                 serve_remove_debugging_leftovers "$debugging_signature"
@@ -103,8 +110,9 @@ serve_show_version() {
 }
 
 serve_examine_code() {
-    local debugging_signature="$1"
-    local maximum_line_length="$2"
+    local debugging_signature=$1
+    local maximum_line_length=$2
+    local metalinter_timeout=$3
 
     log "examine source code"
 
@@ -113,14 +121,23 @@ serve_examine_code() {
             continue
         fi
 
-        log "examine $file"
+        log "examine line length in $file"
 
         examine_line_length "$file" "$maximum_line_length"
+    done
+
+    for file in `git ls-files`; do
+        if test ! -f $file; then
+            continue
+        fi
+
+        log "examine debugging leftovers in $file"
+
         examine_debugging_leftovers "$file" "$debugging_signature"
     done
 
     log "run metalinter"
-    run_metalinter
+    run_metalinter "$metalinter_timeout"
 
     log "run vet"
     run_vet
@@ -129,7 +146,7 @@ serve_examine_code() {
 }
 
 serve_remove_debugging_leftovers() {
-    local signature="$1"
+    local signature=$1
 
     log "remove debugging leftovers"
     sed -i "/$signature/d" *.go
@@ -214,12 +231,13 @@ run_vet() {
 }
 
 run_metalinter() {
-    gometalinter -D golint -D gotype -D vet --cyclo-over 15 2>&1
+    local deadline=$1
+    gometalinter -D vet --cyclo-over 15 --deadline ${deadline}s 2>&1
 }
 
 examine_line_length() {
-    local file="$1"
-    local length="$2"
+    local file=$1
+    local length=$2
 
     grep -q ".\{$length\}" "$file"
     if [ $? -eq 0 ]; then
@@ -228,8 +246,8 @@ examine_line_length() {
 }
 
 examine_debugging_leftovers() {
-    local file="$1"
-    local signature="$2"
+    local file=$1
+    local signature=$2
 
     grep -q "$signature" "$file"
     if [ $? -eq 0 ]; then
