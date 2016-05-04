@@ -1,11 +1,11 @@
 #!/bin/bash
 
 version() {
-    echo -n "4.0"
+    echo -n "4.3"
 }
 
 help() {
-    echo "POE `version`
+    echo "POE $(version)
 
 “I have absolutely no pleasure in the stimulants in which I sometimes so madly
   indulge. It has not been in the pursuit of pleasure that I have periled life
@@ -116,8 +116,9 @@ serve_examine_code() {
 
     log "examine source code"
 
-    for file in `git ls-files`; do
-        if test ! -f $file; then
+    local files=$(git ls-files)
+    for file in "${files[@]}"; do
+        if test ! -f "$file"; then
             continue
         fi
 
@@ -126,8 +127,8 @@ serve_examine_code() {
         examine_line_length "$file" "$maximum_line_length"
     done
 
-    for file in `git ls-files`; do
-        if test ! -f $file; then
+    for file in "${files[@]}"; do
+        if test ! -f "$file"; then
             continue
         fi
 
@@ -149,7 +150,7 @@ serve_remove_debugging_leftovers() {
     local signature=$1
 
     log "remove debugging leftovers"
-    sed -i "/$signature/d" *.go
+    sed -i "/$signature/d" ./*.go
 
     log "goimports"
     goimports -w .
@@ -169,14 +170,14 @@ serve_fix_formatting_directives() {
         run_vet \
             | awk '/possible formatting directive/{print $1$6}' \
             | tr ':' ' ' \
-            | while read file line method;
+            | while read -r file line method;
         do
             if [ "$last_file" != "$file" ]; then
                 log "processing $file"
             fi
             last_file="$file"
 
-            sed -i "${line}s/\.${method}(/\.${method}f(/" $file
+            sed -i "${line}s/\.${method}(/\.${method}f(/" "$file"
 
             echo "$file"
         done
@@ -198,7 +199,7 @@ serve_fix_formatting_directives() {
 
 log() {
     if $verbose; then
-        >&2 echo "# $@"
+        >&2 echo "# $*"
     fi
 }
 
