@@ -22,14 +22,14 @@ SYNOPSIS
 
 OPERATIONS
     -L   Examine Go source code and list suspicious constructs, leftovers
-            from debugging, check length of lines.
-    -X   Remove debugging leftovers.
+            from debug, check length of lines.
+    -X   Remove debug leftovers.
     -F   Try to fix possible formatting directives basing on cmd/vet.
     -V   Show version.
     -h   Show help.
 
 OPTIONS
-    -d   Use specified value as debugging signature [default: XXXXXX].
+    -d   Use specified value as debug signature [default: XXXXXX].
     -l   Use specified value as maximum line length [default: 80].
     -t   Use specified value as metalinter deadline timeout [default: 10].
     -v   Verbose output.
@@ -42,7 +42,7 @@ __main__() {
         exit 1
     fi
 
-    local debugging_signature="XXXXXX"
+    local debug_signature="XXXXXX"
     local maximum_line_length="80"
     local metalinter_timeout="10"
     local verbose=false
@@ -52,7 +52,7 @@ __main__() {
         value="$OPTARG"
         case $arg in
             d)
-                debugging_signature=$value
+                debug_signature=$value
                 ;;
             l)
                 maximum_line_length=$value
@@ -74,12 +74,12 @@ __main__() {
         case $arg in
             L)
                 serve_examine_code \
-                    "$debugging_signature" \
+                    "$debug_signature" \
                     "$maximum_line_length" \
                     "$metalinter_timeout"
                 ;;
             X)
-                serve_remove_debugging_leftovers "$debugging_signature"
+                serve_remove_debug_leftovers "$debug_signature"
                 ;;
             F)
                 serve_fix_formatting_directives
@@ -110,46 +110,45 @@ serve_show_version() {
 }
 
 serve_examine_code() {
-    local debugging_signature=$1
+    local debug_signature=$1
     local maximum_line_length=$2
     local metalinter_timeout=$3
 
-    log "examine source code"
+    log "examining line length"
 
-    local files=$(git ls-files)
+    local files=($(git ls-files))
+
     for file in "${files[@]}"; do
-        if test ! -f "$file"; then
+        if [ ! -f "$file" ]; then
             continue
         fi
-
-        log "examine line length in $file"
 
         examine_line_length "$file" "$maximum_line_length"
     done
 
+    log "examine debug leftovers"
+
     for file in "${files[@]}"; do
-        if test ! -f "$file"; then
+        if [ ! -f "$file" ]; then
             continue
         fi
 
-        log "examine debugging leftovers in $file"
-
-        examine_debugging_leftovers "$file" "$debugging_signature"
+        examine_debug_leftovers "$file" "$debug_signature"
     done
 
-    log "run metalinter"
+    log "running metalinter"
     run_metalinter "$metalinter_timeout"
 
-    log "run vet"
+    log "running vet"
     run_vet
 
     exit 0
 }
 
-serve_remove_debugging_leftovers() {
+serve_remove_debug_leftovers() {
     local signature=$1
 
-    log "remove debugging leftovers"
+    log "remove debug leftovers"
     sed -i "/$signature/d" ./*.go
 
     log "goimports"
@@ -246,13 +245,13 @@ examine_line_length() {
     fi
 }
 
-examine_debugging_leftovers() {
+examine_debug_leftovers() {
     local file=$1
     local signature=$2
 
     grep -q "$signature" "$file"
     if [ $? -eq 0 ]; then
-        grep --color "$signature" -A 2 -B 2 -n "$file"
+        grep --color -H -C 2 -n "$signature" "$file"
     fi
 }
 
