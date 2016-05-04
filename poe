@@ -218,7 +218,7 @@ run_vet() {
     for raw_func in "${common_functions[@]}"
     do
         func="${raw_func}:0"
-        funcf="${raw_func}f:1"
+        funcf="${raw_func}f:0"
 
         if [ -n "$printfuncs" ]; then
             printfuncs="${printfuncs},"
