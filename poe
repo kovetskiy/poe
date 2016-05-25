@@ -241,6 +241,7 @@ examine_line_length() {
 
     grep -q ".\{$length\}" "$file"
     if [ $? -eq 0 ]; then
+        echo "$file:"
         sed 's/\t/    /g' "$file" | grep --color ".\{$length\}" -A 2 -B 2 -n
     fi
 }
