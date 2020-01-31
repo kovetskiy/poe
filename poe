@@ -116,7 +116,7 @@ serve_examine_code() {
 
     log "examining line length"
 
-    local files=($(git ls-files | grep -P '\.go$'))
+    local files=($(git ls-files | grep -P '(?<!gen)\.go$'))
 
     for file in "${files[@]}"; do
         if [ ! -f "$file" ]; then
